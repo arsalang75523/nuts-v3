@@ -1,0 +1,18 @@
+{
+  "accountAssociation": {
+    "header": "eyJmaWQiOjQ0Mzg1NSwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDIwNWY0OWNkYTA1RjY1Nzk2MmY1QTA3OTMyMkQ2RjEwQTMyMWI2MjQifQ",
+    "payload": "eyJkb21haW4iOiJudXRzLWZvdW5kZXIudmVyY2VsLmFwcCJ9",
+    "signature": "MHhhNDFjOWZmMDZhYzQ1MGQxM2NiMWUyYjYzYzM5NmRmNTQ3YjY4NzAyYmJlNDRkNjhhNWVlNWUzNDZlZmUxMDJkNjU1MzQzYmNiZDAwMzAxYjBmZTE5YjUzM2FhYWQzNzVjNzBlMDExNzEzOTgxZTcyYzZiMTk0OGRhMmUwMDczMzFi"
+  },
+  "frame": {
+    "version": "1",
+    "name": "farcaster tips stats",
+    "iconUrl": "https://nuts-founder.vercel.app/icon.png",
+    "homeUrl": "https://nuts-founder.vercel.app",
+    "imageUrl": "https://nuts-founder.vercel.app/opengraph-image",
+    "buttonTitle": "Launch Frame",
+    "splashImageUrl": "https://nuts-founder.vercel.app/splash.png",
+    "splashBackgroundColor": "#eeccff",
+    "webhookUrl": "https://api.neynar.com/f/app/1a9a118e-683d-4e86-814e-283e8bf02dcc/event"
+  }
+}
