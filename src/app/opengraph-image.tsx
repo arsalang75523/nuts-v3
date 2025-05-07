@@ -10,7 +10,7 @@ export const contentType = "image/png";
 
 // تنظیم metadataBase برای رفع URL‌های نسبی
 export const metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || "https://nuts-founder.vercel.app"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_URL || "https://nuts-founder.vercel.app"),
 };
 
 interface NeynarUser {
@@ -199,7 +199,7 @@ async function fetchDuneStats(fid: string): Promise<{ allTimeEarning: number; ra
     console.log("[fetchDuneStats] Fetching data for FID:", fid);
     
     // Use the new API endpoint instead of connecting to SQLite directly
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+    const baseUrl = process.env.NEXT_PUBLIC_URL || "https://nuts-founder.vercel.app";
     const apiUrl = `${baseUrl}/api/dune-stats?fid=${fid}`;
     console.log("[fetchDuneStats] Calling API:", apiUrl);
     
@@ -250,7 +250,7 @@ async function fetchNFTData(userData: NeynarUser | null): Promise<{ allowance: n
       return { allowance: "Mint your allowance", memberType: "Not Active" };
     }
     
-    const apiUrl = `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/api/nft-data`;
+    const apiUrl = `${process.env.NEXT_PUBLIC_URL || "https://nuts-founder.vercel.app"}/api/nft-data`;
     console.log("[fetchNFTData] Fetching from API:", apiUrl);
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -289,7 +289,7 @@ function isValidUrl(url: string | undefined): boolean {
 }
 
 async function loadFont(): Promise<ArrayBuffer> {
-  const fontUrl = `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/fonts/poetsen-one.ttf`;
+  const fontUrl = `${process.env.NEXT_PUBLIC_URL || "https://nuts-founder.vercel.app"}/fonts/poetsen-one.ttf`;
   console.log("[loadFont] Fetching font from:", fontUrl);
   const res = await fetch(fontUrl);
   if (!res.ok) {
