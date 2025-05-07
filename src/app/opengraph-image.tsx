@@ -10,7 +10,7 @@ export const contentType = "image/png";
 
 // تنظیم metadataBase برای رفع URL‌های نسبی
 export const metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || "https://nuts-founder.vercel.app"),
 };
 
 interface NeynarUser {
