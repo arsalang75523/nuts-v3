@@ -201,6 +201,7 @@ export default function Demo(
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
   const [lastProgress, setLastProgress] = useState(0);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [error, setError] = useState<string | null>(null);
   const [isWebnutsModalOpen, setIsWebnutsModalOpen] = useState(false);
   const [tippedTodayCasts, setTippedTodayCasts] = useState<CastWithAuthor[]>([]);
