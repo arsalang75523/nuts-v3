@@ -189,7 +189,7 @@ export default function Demo(
   });
 
   const [userData, setUserData] = useState<NeynarUser | null>(null);
-  const [nftWallets, setNftWallets] = useState<string[]>([]); // برای مدیریت آدرس‌های کیف‌پول
+  const [nftWallets, setNftWallets] = useState<string[]>([]);
   const [tipStats, setTipStats] = useState<TipStats>({
     todayEarning: 0,
     allTimeEarning: 0,
@@ -200,7 +200,7 @@ export default function Demo(
   });
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
-  const [lastProgress, setLastProgress] = useState(0); // برای جلوگیری از پرش به عقب
+  const [lastProgress, setLastProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isWebnutsModalOpen, setIsWebnutsModalOpen] = useState(false);
   const [tippedTodayCasts, setTippedTodayCasts] = useState<CastWithAuthor[]>([]);
@@ -229,22 +229,31 @@ export default function Demo(
   // تنظیم targetFid
   useEffect(() => {
     console.log("[Debug] isSDKLoaded:", isSDKLoaded);
+    console.log("[Debug] Context:", context);
     console.log("[Debug] Context user FID:", context?.user?.fid);
     console.log("[Debug] Current targetFid:", targetFid);
     console.log("[Debug] Session status:", status);
     console.log("[Debug] Session data:", session);
-    if (isSDKLoaded && context?.user?.fid && targetFid !== context.user.fid.toString()) {
+
+    if (!isSDKLoaded) {
+      console.log("[Debug] SDK not loaded yet, waiting...");
+      return;
+    }
+
+    if (context?.user?.fid && targetFid !== context.user.fid.toString()) {
       setTargetFid(context.user.fid.toString());
+      setError(null); // پاک کردن خطای قبلی
+      setLoading(true);
+      updateProgress(0);
       console.log("[Debug] targetFid updated to:", context.user.fid.toString());
-      setLoading(true); // شروع بارگذاری با FID جدید
-      updateProgress(0); // ریست پیشرفت
     } else if (!context?.user?.fid) {
-      console.log("[Debug] No FID available, keeping targetFid empty");
+      console.log("[Debug] No FID available, setting error");
       setError("Please open the frame from Farcaster to view your data");
       setLoading(false);
+      setTargetFid(""); // ریست targetFid
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSDKLoaded, context, status, session, targetFid]);
+  }, [isSDKLoaded, context, status, session]);
 
   // بارگذاری داده‌ها
   useEffect(() => {
@@ -265,8 +274,8 @@ export default function Demo(
         console.log("[Debug] Starting fetchAllData for targetFid:", targetFid);
 
         // تخصیص وزن به هر تابع
-        const totalSteps = 5; // تعداد توابع
-        const stepWeight = 80 / totalSteps; // 80% برای مراحل اصلی (10% اولیه + 10% نهایی)
+        const totalSteps = 5;
+        const stepWeight = 80 / totalSteps;
 
         const [userData, tipStats, duneStats, nftData, leaderboard] = await Promise.all([
           fetchUserData(stepWeight),
@@ -283,7 +292,6 @@ export default function Demo(
         console.log("[Debug] Fetched leaderboard:", leaderboard);
 
         setUserData(userData || null);
-        // تنظیم آدرس‌های کیف‌پول برای NFT
         const wallets = userData?.verifications || [];
         if (userData?.custody_address && !wallets.includes(userData.custody_address)) {
           wallets.push(userData.custody_address);
@@ -305,7 +313,6 @@ export default function Demo(
       } catch (err) {
         setError("Failed to fetch data: " + (err as Error).message);
         console.error("[Error] fetchAllData:", err);
-      } finally {
         setLoading(false);
       }
     };
@@ -354,7 +361,7 @@ export default function Demo(
         updateProgress(lastProgress + weight * 0.25);
         let allCastsForTipped: Cast[] = [];
         let cursorForTipped: string | null = null;
-        const maxTippedPages = 5; // کاهش برای بهینه‌سازی
+        const maxTippedPages = 5;
         let tippedPages = 0;
         const pageWeight = (weight * 0.25) / maxTippedPages;
 
@@ -474,7 +481,7 @@ export default function Demo(
 
         let allCastsForEarning: Cast[] = [];
         let cursorForEarning: string | null = null;
-        const maxEarningPages = 5; // کاهش برای بهینه‌سازی
+        const maxEarningPages = 5;
         let earningPages = 0;
         const earningPageWeight = (weight * 0.25) / maxEarningPages;
 
@@ -744,7 +751,7 @@ export default function Demo(
 
     fetchAllData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetFid]); // فقط به targetFid وابسته است
+  }, [targetFid]);
 
   const sendNotification = useCallback(async () => {
     setSendNotificationResult("");
@@ -783,7 +790,8 @@ export default function Demo(
 
   console.log("[Debug] Rendering with tipStats:", tipStats);
 
-  if (!isSDKLoaded || (loading && targetFid)) {
+  // شرط رندر اصلاح‌شده
+  if (loading && targetFid) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#2b1409] via-[#4a2512] to-[#6b3a1e] p-4">
         <div className="loader-container">
@@ -916,7 +924,9 @@ export default function Demo(
     );
   }
 
-  if (error) return <div className="text-red-500 text-center">{error}</div>;
+  if (error && !targetFid) {
+    return <div className="text-red-500 text-center">{error}</div>;
+  }
 
   console.log("[Debug] Rendering with tipStats:", tipStats);
   console.log("[Debug] Rendering with userData:", userData);
