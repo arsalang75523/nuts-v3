@@ -211,7 +211,7 @@ export default function Demo(
     { fid: number; username: string; rank: number; allTimePeanutCount: number }[]
   >([]);
   const [sendNotificationResult, setSendNotificationResult] = useState("");
-  const [targetFid, setTargetFid] = useState<string>("443855"); // مقدار پیش‌فرض FID
+  const [targetFid, setTargetFid] = useState<string>("395478"); // مقدار پیش‌فرض FID
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isImageLoading, setIsImageLoading] = useState(true);
 
