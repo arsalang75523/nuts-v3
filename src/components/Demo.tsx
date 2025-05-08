@@ -252,8 +252,7 @@ export default function Demo(
       setLoading(false);
       setTargetFid(""); // ریست targetFid
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSDKLoaded, context, status, session]);
+  }, [isSDKLoaded, context, status, session, targetFid, updateProgress]);
 
   // بارگذاری داده‌ها
   useEffect(() => {
@@ -310,6 +309,7 @@ export default function Demo(
         setLeaderboardData(leaderboard);
         updateProgress(90);
         updateProgress(100);
+        setLoading(false); // اضافه کردن این خط برای پایان حالت بارگذاری
       } catch (err) {
         setError("Failed to fetch data: " + (err as Error).message);
         console.error("[Error] fetchAllData:", err);
@@ -751,7 +751,7 @@ export default function Demo(
 
     fetchAllData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetFid]);
+  }, [targetFid, updateProgress, lastProgress]);
 
   const sendNotification = useCallback(async () => {
     setSendNotificationResult("");
@@ -924,10 +924,12 @@ export default function Demo(
     );
   }
 
+  // شرط رندر اصلاح‌شده برای نمایش خطا یا صفحه اصلی
   if (error && !targetFid) {
     return <div className="text-red-500 text-center">{error}</div>;
   }
 
+  // اگر بارگذاری تمام شده و خطایی وجود ندارد، صفحه اصلی نمایش داده می‌شود
   console.log("[Debug] Rendering with tipStats:", tipStats);
   console.log("[Debug] Rendering with userData:", userData);
 
