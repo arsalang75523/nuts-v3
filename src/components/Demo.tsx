@@ -159,7 +159,7 @@ export default function Demo(
   { title }: { title?: string } = { title: "Farcaster Tips Stats Demo" }
 ) {
   const { isSDKLoaded, context, notificationDetails } = useFrame();
-  const { address, isConnected } = useAccount();
+  const { isConnected } = useAccount(); //const { address, isConnected } = useAccount();
   // const { connect, connectors, error: connectError } = useConnect(); // اضافه کردن useConnect
   const { status } = useSession();
 
@@ -764,7 +764,7 @@ export default function Demo(
             animation: pulse 2s ease-in-out infinite;
           }
           .peanut-bar {
-            width: 320px;
+            width: 290px;
             height: 30px;
             background: #3a2a1a;
             border-radius: 15px;
@@ -961,13 +961,15 @@ export default function Demo(
             </div>*/}
             </>
           ) : (
-            <p className="text-center text-[#f5c542] mb-4">
-              Connected: {truncateAddressShort(address || "")}
-            </p> 
+            // <p className="text-center text-[#f5c542] mb-4">
+              //  Connected: {truncateAddressShort(address || "")}
+            // </p> 
+            <>
+            </>
         )}
 
         <div className="relative w-full h-[150px] mb-10">
-          <div className="absolute top-[17px] left-[6px] w-[117px] h-[117px] rounded-full overflow-hidden transition-transform border-4 border-white">
+          <div className="absolute top-[6px] left-[6px] w-[117px] h-[117px] rounded-full overflow-hidden transition-transform border-4 border-white">
             {userData?.pfp_url ? (
               <Image
                 src={userData.pfp_url}
@@ -982,7 +984,7 @@ export default function Demo(
 
           <div
             className="absolute"
-            style={{ top: 85, right: -10, width: 160, height: 160 }}
+            style={{ top: 70, right: -10, width: 160, height: 160 }}
           >
             <img
               src={memberImageUrl}
@@ -992,14 +994,14 @@ export default function Demo(
           </div>
 
           <div
-            className="absolute top-[50px] left-[140px] text-[#ffffff] text-xl font-bold animate-pulse-slow"
+            className="absolute top-[40px] left-[140px] text-[#ffffff] text-xl font-bold animate-pulse-slow"
             style={{ fontFamily: '"Poetsen One", sans-serif' }}
           >
             {userData?.username || "user.eth"}
           </div>
 
           <div
-            className="absolute top-[98px] left-[180px] text-[#432818] text-lg font-bold animate-pulse-slow"
+            className="absolute top-[86px] left-[180px] text-[#432818] text-lg font-bold animate-pulse-slow"
             style={{ fontFamily: '"Poetsen One", sans-serif' }}
           >
             {targetFid || "N/A"}
@@ -1013,7 +1015,7 @@ export default function Demo(
               color: "text-white",
               minimal: true,
               offsetX: 60,
-              offsetY: 17,
+              offsetY: 13,
               action: () => setIsTodayEarningModalOpen(true),
               cursor: true,
               style: {
@@ -1025,7 +1027,7 @@ export default function Demo(
               color: "text-white",
               minimal: true,
               offsetX: 60,
-              offsetY: 17,
+              offsetY: 13,
               style: {
                 lineHeight: "1.1",
               },
@@ -1038,7 +1040,7 @@ export default function Demo(
               cursor: true,
               minimal: true,
               offsetX: -190,
-              offsetY: 75,
+              offsetY: 71,
               style: {
                 lineHeight: "1.1",
               },
@@ -1049,7 +1051,7 @@ export default function Demo(
               color: "text-white",
               minimal: true,
               offsetX: 190,
-              offsetY: -22,
+              offsetY: -28,
               action: () => setIsLeaderboardModalOpen(true),
               cursor: true,
               style: {
@@ -1070,7 +1072,7 @@ export default function Demo(
               },
               minimal: true,
               offsetX: -85,
-              offsetY: 50,
+              offsetY: 45,
             },
             {
               title: "Member Type",
@@ -1078,10 +1080,10 @@ export default function Demo(
               minimal: true,
               color: "text-[#432818]",
               offsetX: -200,
-              offsetY: -183,
+              offsetY: -200,
               style: {
                 fontFamily: "Poetsen One",
-                fontSize: "2rem",
+                fontSize: "1.3rem",
                 lineHeight: "1.1",
               },
             },
@@ -1118,7 +1120,7 @@ export default function Demo(
         </div>
         <div
           className="text-center p-4 rounded-xl min-h-[80px] flex flex-col items-center justify-center transition-all duration-300"
-          style={{ transform: `translate(105px, -55px)` }}
+          style={{ transform: `translate(105px, -69px)` }}
         >
           <div
             className="text-xl font-bold text-[#fca311]"
@@ -1214,15 +1216,10 @@ export default function Demo(
                   </button>
                   <button
                     onClick={() => {
-                      if (navigator.share) {
-                        navigator.share({
-                          title: "Farcaster Tips Stats",
-                          text: `Check out my Farcaster Tips Stats`,
-                          url: `${window.location.origin}/api/og?fid=${targetFid}`,
-                        });
-                      } else {
-                        alert("Web Share API is not supported in your browser.");
-                      }
+                      const text = encodeURIComponent(`Check out my Farcaster Tips Stats!`);
+                      const embedUrl = encodeURIComponent(`${window.location.origin}/api/og?fid=${targetFid}`);
+                      const composeUrl = `https://warpcast.com/~/compose?text=${text}&embeds[]=${embedUrl}`;
+                      window.open(composeUrl, "_blank");
                     }}
                     className="py-2 px-4 bg-[#f5c542] text-[#1a0e06] rounded-lg font-semibold hover:bg-[#e5b532] transition-colors duration-200"
                   >
