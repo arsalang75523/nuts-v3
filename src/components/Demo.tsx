@@ -1436,20 +1436,48 @@ function SignIn() {
   return (
     <div>
       {status === "authenticated" ? (
-        <img
-          src="https://img1.pixhost.to/images/5197/590510977_signout-btn.png"
-          alt="Sign Out"
+        <button
           onClick={handleSignOut}
-          className="w-[140px] cursor-pointer transition-transform duration-200 hover:scale-105"
-        />
+          className="w-[140px] h-[40px] bg-gradient-to-r from-[#8b5e34] to-[#f5c542] text-[#1a0e06] font-semibold rounded-lg flex items-center justify-center cursor-pointer transition-transform duration-200 hover:scale-105 hover:shadow-[0_0_8px_rgba(245,197,66,0.5)]"
+        >
+          Sign Out
+        </button>
       ) : (
-        <img
-          src="https://img1.pixhost.to/images/5197/590510976_signin-btn.png"
-          alt="Sign In"
+        <button
           onClick={handleSignIn}
-          className="w-[140px] cursor-pointer transition-transform duration-200 hover:scale-105"
-        />
+          className="w-[140px] h-[40px] bg-gradient-to-r from-[#8b5e34] to-[#f5c542] text-[#1a0e06] font-semibold rounded-lg flex items-center justify-center cursor-pointer transition-transform duration-200 hover:scale-105 hover:shadow-[0_0_8px_rgba(245,197,66,0.5)]"
+        >
+          Sign In
+        </button>
       )}
+      <style jsx>{`
+        button {
+          font-family: "Poetsen One", sans-serif;
+          font-size: 1rem;
+          border: 2px solid #5a3a2a;
+          text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+          position: relative;
+          overflow: hidden;
+        }
+        button::before {
+          content: "";
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255, 255, 255, 0.2),
+            transparent
+          );
+          transition: left 0.3s ease;
+        }
+        button:hover::before {
+          left: 100%;
+        }
+      `}</style>
     </div>
   );
 }

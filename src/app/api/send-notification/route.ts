@@ -37,8 +37,8 @@ export async function POST(request: NextRequest) {
   const sendNotification = neynarEnabled ? sendNeynarFrameNotification : sendFrameNotification;
   const sendResult = await sendNotification({
     fid: Number(requestBody.data.fid),
-    title: "Test notification",
-    body: "Sent at " + new Date().toISOString(),
+    title: "nuts Tips Update",
+    body: requestBody.data.notificationDetails.token, // استفاده از پیام ارسالی از کد اصلی
   });
 
   if (sendResult.state === "error") {
