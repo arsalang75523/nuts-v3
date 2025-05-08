@@ -189,6 +189,7 @@ export default function Demo(
   });
 
   const [userData, setUserData] = useState<NeynarUser | null>(null);
+  const [nftWallets, setNftWallets] = useState<string[]>([]); // برای مدیریت آدرس‌های کیف‌پول
   const [tipStats, setTipStats] = useState<TipStats>({
     todayEarning: 0,
     allTimeEarning: 0,
@@ -199,6 +200,7 @@ export default function Demo(
   });
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
+  const [lastProgress, setLastProgress] = useState(0); // برای جلوگیری از پرش به عقب
   const [error, setError] = useState<string | null>(null);
   const [isWebnutsModalOpen, setIsWebnutsModalOpen] = useState(false);
   const [tippedTodayCasts, setTippedTodayCasts] = useState<CastWithAuthor[]>([]);
@@ -214,24 +216,36 @@ export default function Demo(
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isImageLoading, setIsImageLoading] = useState(true);
 
-  // تنظیم targetFid بر اساس FID کاربر در زمان باز شدن فریم
+  // تابع برای به‌روزرسانی ایمن progress
+  const updateProgress = useCallback((newProgress: number) => {
+    setProgress((prev) => {
+      const cappedProgress = Math.min(Math.max(newProgress, prev), 100);
+      setLastProgress(cappedProgress);
+      console.log("[Debug] Updating progress to:", cappedProgress);
+      return cappedProgress;
+    });
+  }, []);
+
+  // تنظیم targetFid
   useEffect(() => {
     console.log("[Debug] isSDKLoaded:", isSDKLoaded);
     console.log("[Debug] Context user FID:", context?.user?.fid);
     console.log("[Debug] Current targetFid:", targetFid);
     console.log("[Debug] Session status:", status);
     console.log("[Debug] Session data:", session);
-    if (isSDKLoaded && context?.user?.fid) {
+    if (isSDKLoaded && context?.user?.fid && targetFid !== context.user.fid.toString()) {
       setTargetFid(context.user.fid.toString());
       console.log("[Debug] targetFid updated to:", context.user.fid.toString());
-    } else {
+      setLoading(true); // شروع بارگذاری با FID جدید
+      updateProgress(0); // ریست پیشرفت
+    } else if (!context?.user?.fid) {
       console.log("[Debug] No FID available, keeping targetFid empty");
       setError("Please open the frame from Farcaster to view your data");
       setLoading(false);
     }
   }, [isSDKLoaded, context, status, session, targetFid]);
 
-  // بارگذاری داده‌ها بر اساس targetFid
+  // بارگذاری داده‌ها
   useEffect(() => {
     console.log("[Debug] fetchAllData useEffect triggered with targetFid:", targetFid);
     if (!targetFid) {
@@ -246,21 +260,35 @@ export default function Demo(
     const fetchAllData = async () => {
       try {
         setLoading(true);
-        setProgress(10);
+        updateProgress(10);
         console.log("[Debug] Starting fetchAllData for targetFid:", targetFid);
+
+        // تخصیص وزن به هر تابع
+        const totalSteps = 5; // تعداد توابع
+        const stepWeight = 80 / totalSteps; // 80% برای مراحل اصلی (10% اولیه + 10% نهایی)
+
         const [userData, tipStats, duneStats, nftData, leaderboard] = await Promise.all([
-          fetchUserData(),
-          fetchTipStats(),
-          fetchDuneStats(),
-          fetchNFTData(),
-          fetchLeaderboard(),
+          fetchUserData(stepWeight),
+          fetchTipStats(stepWeight),
+          fetchDuneStats(stepWeight),
+          fetchNFTData(stepWeight),
+          fetchLeaderboard(stepWeight),
         ]);
+
         console.log("[Debug] Fetched userData:", userData);
         console.log("[Debug] Fetched tipStats:", tipStats);
         console.log("[Debug] Fetched duneStats:", duneStats);
         console.log("[Debug] Fetched nftData:", nftData);
         console.log("[Debug] Fetched leaderboard:", leaderboard);
+
         setUserData(userData || null);
+        // تنظیم آدرس‌های کیف‌پول برای NFT
+        const wallets = userData?.verifications || [];
+        if (userData?.custody_address && !wallets.includes(userData.custody_address)) {
+          wallets.push(userData.custody_address);
+        }
+        setNftWallets(wallets);
+
         setTipStats((prev) => ({
           ...prev,
           todayEarning: tipStats.todayEarning || 0,
@@ -271,7 +299,8 @@ export default function Demo(
           memberType: nftData.memberType || "Not Active",
         }));
         setLeaderboardData(leaderboard);
-        setProgress(100);
+        updateProgress(90);
+        updateProgress(100);
       } catch (err) {
         setError("Failed to fetch data: " + (err as Error).message);
         console.error("[Error] fetchAllData:", err);
@@ -280,7 +309,7 @@ export default function Demo(
       }
     };
 
-    const fetchUserData = async (): Promise<NeynarUser | undefined> => {
+    const fetchUserData = async (weight: number): Promise<NeynarUser | undefined> => {
       const url: string = `https://api.neynar.com/v2/farcaster/user/bulk?fids=${targetFid}`;
       const options = {
         method: "GET",
@@ -292,7 +321,7 @@ export default function Demo(
       };
 
       try {
-        setProgress(20);
+        updateProgress(lastProgress + weight * 0.5);
         console.log("[Debug] Fetching user data from URL:", url);
         const res = await fetch(url, options);
         if (!res.ok) {
@@ -300,8 +329,8 @@ export default function Demo(
         }
         const json = await res.json();
         if (json.users && json.users.length > 0) {
-          setUserData(json.users[0]);
           console.log("[Debug] User data fetched:", json.users[0]);
+          updateProgress(lastProgress + weight);
           return json.users[0];
         } else {
           setError("User not found");
@@ -315,17 +344,18 @@ export default function Demo(
       }
     };
 
-    const fetchTipStats = async (): Promise<{ todayEarning: number; tippedToday: number }> => {
+    const fetchTipStats = async (weight: number): Promise<{ todayEarning: number; tippedToday: number }> => {
       console.log("[Debug] Fetching tip stats for targetFid:", targetFid);
       let tippedToday = 0;
       let todayEarning = 0;
 
       try {
-        setProgress(40);
+        updateProgress(lastProgress + weight * 0.25);
         let allCastsForTipped: Cast[] = [];
         let cursorForTipped: string | null = null;
-        const maxTippedPages = 10;
+        const maxTippedPages = 5; // کاهش برای بهینه‌سازی
         let tippedPages = 0;
+        const pageWeight = (weight * 0.25) / maxTippedPages;
 
         console.log("[Debug] Starting to fetch casts for tippedToday");
         do {
@@ -353,7 +383,7 @@ export default function Demo(
           );
           cursorForTipped = searchJson.result.next?.cursor || null;
           tippedPages++;
-          setProgress(40 + (tippedPages / maxTippedPages) * 20);
+          updateProgress(lastProgress + pageWeight * tippedPages);
         } while (cursorForTipped && tippedPages < maxTippedPages);
 
         console.log(
@@ -439,12 +469,13 @@ export default function Demo(
         });
 
         setTipStats((prev) => ({ ...prev, tippedToday }));
-        setProgress(60);
+        updateProgress(lastProgress + weight * 0.5);
 
         let allCastsForEarning: Cast[] = [];
         let cursorForEarning: string | null = null;
-        const maxEarningPages = 10;
+        const maxEarningPages = 5; // کاهش برای بهینه‌سازی
         let earningPages = 0;
+        const earningPageWeight = (weight * 0.25) / maxEarningPages;
 
         console.log("[Debug] Starting to fetch casts for todayEarning");
         do {
@@ -475,7 +506,7 @@ export default function Demo(
           );
           cursorForEarning = earningJson.result.next?.cursor || null;
           earningPages++;
-          setProgress(60 + (earningPages / maxEarningPages) * 20);
+          updateProgress(lastProgress + earningPageWeight * earningPages);
         } while (cursorForEarning && earningPages < maxEarningPages);
 
         console.log(
@@ -547,6 +578,7 @@ export default function Demo(
 
         setTipStats((prev) => ({ ...prev, todayEarning }));
         console.log("[Debug] Tip stats updated:", { todayEarning, tippedToday });
+        updateProgress(lastProgress + weight);
         return { todayEarning, tippedToday };
       } catch (err) {
         console.error("[Error] Failed to fetch tip stats:", err);
@@ -556,7 +588,7 @@ export default function Demo(
       }
     };
 
-    const fetchDuneStats = async (): Promise<{ allTimeEarning: number; rank: number }> => {
+    const fetchDuneStats = async (weight: number): Promise<{ allTimeEarning: number; rank: number }> => {
       try {
         console.log(
           "[SQLite] Fetching data from SQLite Cloud for targetFid:",
@@ -565,6 +597,7 @@ export default function Demo(
           typeof targetFid,
           ")"
         );
+        updateProgress(lastProgress + weight * 0.5);
         const db = new Database(
           "sqlitecloud://cntihai1nk.g4.sqlite.cloud:8860/dune_data.db?apikey=GEKHc2AnfNuuZQvBjekbuOP7QHlFWPHSHPChPKswA4c"
         );
@@ -601,6 +634,7 @@ export default function Demo(
           allTimeEarning: userData.all_time_peanut_count || 0,
           rank: userData.rank || 0,
         }));
+        updateProgress(lastProgress + weight);
         return { allTimeEarning: userData.all_time_peanut_count || 0, rank: userData.rank || 0 };
       } catch (err) {
         console.error("[SQLite Error] Failed to fetch data:", err);
@@ -614,9 +648,10 @@ export default function Demo(
       }
     };
 
-    const fetchNFTData = async (): Promise<{ allowance: number | string; memberType: string }> => {
+    const fetchNFTData = async (weight: number): Promise<{ allowance: number | string; memberType: string }> => {
       try {
-        console.log("[SQLite NFT] Fetching NFT data for wallets:", userData?.verifications);
+        console.log("[SQLite NFT] Fetching NFT data for wallets:", nftWallets);
+        updateProgress(lastProgress + weight * 0.5);
         const db = new Database(
           "sqlitecloud://cntihai1nk.g4.sqlite.cloud:8860/nft_holders.db?apikey=GEKHc2AnfNuuZQvBjekbuOP7QHlFWPHSHPChPKswA4c"
         );
@@ -627,13 +662,7 @@ export default function Demo(
         let allowance = 0;
         let memberType = "Not Active";
 
-        // بررسی همه آدرس‌های تأییدشده
-        const wallets = userData?.verifications || [];
-        if (userData?.custody_address && !wallets.includes(userData.custody_address)) {
-          wallets.push(userData.custody_address);
-        }
-
-        for (const wallet of wallets) {
+        for (const wallet of nftWallets) {
           const newNFTData = newNFTHolders.find(
             (holder) => holder.wallet.toLowerCase() === wallet.toLowerCase()
           );
@@ -652,7 +681,7 @@ export default function Demo(
         }
 
         const finalAllowance = allowance > 0 ? allowance : "Mint your allowance";
-        if (!wallets.length) {
+        if (!nftWallets.length) {
           console.error("[SQLite NFT Error] No valid wallet addresses available");
           memberType = "Not Active";
         }
@@ -663,6 +692,7 @@ export default function Demo(
           allowance: finalAllowance,
           memberType,
         }));
+        updateProgress(lastProgress + weight);
         return { allowance: finalAllowance, memberType };
       } catch (err) {
         console.error("[SQLite NFT Error] Failed to fetch NFT data:", err);
@@ -676,9 +706,10 @@ export default function Demo(
       }
     };
 
-    const fetchLeaderboard = async () => {
+    const fetchLeaderboard = async (weight: number) => {
       try {
         console.log("[SQLite] Fetching leaderboard data from SQLite Cloud");
+        updateProgress(lastProgress + weight * 0.5);
         const db = new Database(
           "sqlitecloud://cntihai1nk.g4.sqlite.cloud:8860/dune_data.db?apikey=GEKHc2AnfNuuZQvBjekbuOP7QHlFWPHSHPChPKswA4c"
         );
@@ -702,6 +733,7 @@ export default function Demo(
           }));
 
         console.log("[SQLite] Leaderboard data:", leaderboardData);
+        updateProgress(lastProgress + weight);
         return leaderboardData;
       } catch (err) {
         console.error("[SQLite Error] Failed to fetch leaderboard data:", err);
@@ -710,7 +742,7 @@ export default function Demo(
     };
 
     fetchAllData();
-  }, [targetFid, userData?.verifications, userData?.custody_address]);
+  }, [targetFid]); // فقط به targetFid وابسته است
 
   const sendNotification = useCallback(async () => {
     setSendNotificationResult("");
@@ -759,7 +791,7 @@ export default function Demo(
               <span className="peanut-emoji"></span>
             </div>
           </div>
-          <p className="progress-percent">{Math.min(progress, 100)}%</p>
+          <p className="progress-percent">{Math.round(progress)}%</p>
         </div>
         <style jsx>{`
           .loader-container {
@@ -969,14 +1001,6 @@ export default function Demo(
           rel="stylesheet"
         />
         <h1 className="text-2xl font-bold text-center mb-4 text-[#f5c542]">{title}</h1>
-
-        {!isConnected ? (
-          <>
-          </>
-        ) : (
-          <>
-          </>
-        )}
 
         <div className="relative w-full h-[150px] mb-10">
           <div className="absolute top-[6px] left-[6px] w-[117px] h-[117px] rounded-full overflow-hidden transition-transform border-4 border-white">
