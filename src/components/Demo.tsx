@@ -243,6 +243,7 @@ export default function Demo(
       setError("Please open the frame from Farcaster to view your data");
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSDKLoaded, context, status, session, targetFid]);
 
   // بارگذاری داده‌ها
@@ -742,6 +743,7 @@ export default function Demo(
     };
 
     fetchAllData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetFid]); // فقط به targetFid وابسته است
 
   const sendNotification = useCallback(async () => {
