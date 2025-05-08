@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @next/next/no-img-element */
 /* eslint-disable @next/next/no-page-custom-font */
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { Metadata } from "next";
 import Image from "next/image";
 import { signIn, signOut } from "next-auth/react";
@@ -12,13 +13,20 @@ import { useFrame } from "~/components/providers/FrameProvider";
 import { Database } from "@sqlitecloud/drivers";
 import { size, toHex } from "viem";
 
-// تعریف ABI برای قراردادهای NFT
+// تعریف ABI‌ها برای قراردادهای NFT
 const ogNftAbi = [
   {
     inputs: [],
     name: "mint",
     outputs: [],
     stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "owner", type: "address" }],
+    name: "balanceOf",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
     type: "function",
   },
 ] as const;
@@ -31,25 +39,44 @@ const allowanceNftAbi = [
     stateMutability: "nonpayable",
     type: "function",
   },
+  {
+    inputs: [{ name: "owner", type: "address" }],
+    name: "balanceOf",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
 ] as const;
 
-const OG_NFT_CONTRACT_ADDRESS = "0x8F7Aa5FFd552e9ceA4d0Dd06A8BF97AbaaE9136e";
-const ALLOWANCE_NFT_CONTRACT_ADDRESS = "0x0e0E1d68954411BF0Cc1743dc3616c3fe29CF004";
+// آدرس‌های قرارداد
+const OG_NFT_CONTRACT_ADDRESS = "0xYourOgNftContractAddress" as `0x${string}`;
+const ALLOWANCE_NFT_CONTRACT_ADDRESS = "0xYourAllowanceNftContractAddress" as `0x${string}`;
 
-interface NeynarUser {
-  fid: number;
-  username: string;
-  display_name: string;
-  pfp_url: string;
-  custody_address?: string;
-  verifications?: string[];
-}
-
+// رابط‌ها
 interface ButtonItem {
   text: string;
   image: string;
   onClick: () => void;
-  className: string;
+  className?: string;
+}
+
+interface Cast {
+  text: string;
+  timestamp: string;
+  author: { fid: number };
+  parent_author?: { fid: number };
+}
+
+interface CastWithAuthor {
+  text: string;
+  author: { fid: number; username: string };
+}
+
+interface SearchCastsResponse {
+  result: {
+    casts: Cast[];
+    next?: { cursor: string };
+  };
 }
 
 interface TipStats {
@@ -61,41 +88,25 @@ interface TipStats {
   memberType: string;
 }
 
-interface Cast {
-  hash: string;
-  text: string;
-  timestamp: string;
-  author: { fid: number };
-  parent_hash?: string;
-  parent_author?: { fid: number };
-  replies?: { count: number; casts: Cast[] };
-}
-
-interface SearchCastsResponse {
-  result: {
-    casts: Cast[];
-    next?: { cursor: string };
-  };
+interface NeynarUser {
+  fid: number;
+  username: string;
+  display_name: string;
+  pfp_url: string;
+  custody_address?: string;
+  verifications?: string[];
 }
 
 interface DuneRow {
-  parent_fid: string | null;
-  total_peanut_count: number | null;
-  rank: number | null;
-  daily_peanut_count: number | null;
-  all_time_peanut_count: number | null;
-  fid: string | null;
-  sent_peanut_count: number | null;
+  fid?: number;
+  parent_fid?: number;
+  all_time_peanut_count?: number;
+  rank?: number;
 }
 
 interface NFTHolder {
   wallet: string;
   count: number;
-}
-
-interface CastWithAuthor {
-  text: string;
-  author: { fid: number; username: string };
 }
 
 // تابع برای کوتاه کردن آدرس
@@ -110,7 +121,7 @@ const calculateImageSize = (fid: string | undefined) => {
   return size(toHex(baseSize)).toString();
 };
 
-// تابع برای دریافت نام‌های کاربری بر اساس فیدها
+// تابع برای دریافت نام‌های کاربری
 const fetchUsernames = async (fids: number[]): Promise<Record<number, string>> => {
   if (fids.length === 0) return {};
   const url = `https://api.neynar.com/v2/farcaster/user/bulk?fids=${fids.join(",")}`;
@@ -159,35 +170,29 @@ export default function Demo(
   { title }: { title?: string } = { title: "Farcaster Tips Stats Demo" }
 ) {
   const { isSDKLoaded, context, notificationDetails } = useFrame();
-  const { isConnected } = useAccount();
+  const { isConnected, address } = useAccount();
   const { status, data: session } = useSession();
 
-  // Hooks for OG NFT contract interaction
+  // هوک‌های قرارداد NFT
   const {
     writeContract: mintOgNft,
     isPending: isOgMinting,
-    data: ogTxData,
+    data: ogTxHash,
   } = useWriteContract();
-
-  const {
-    isLoading: isOgTxLoading,
-  } = useWaitForTransactionReceipt({
-    hash: ogTxData,
+  const { isLoading: isOgTxLoading } = useWaitForTransactionReceipt({
+    hash: ogTxHash,
   });
 
-  // Hooks for Allowance NFT contract interaction
   const {
     writeContract: mintAllowanceNft,
     isPending: isAllowanceMinting,
-    data: allowanceTxData,
+    data: allowanceTxHash,
   } = useWriteContract();
-
-  const {
-    isLoading: isAllowanceTxLoading,
-  } = useWaitForTransactionReceipt({
-    hash: allowanceTxData,
+  const { isLoading: isAllowanceTxLoading } = useWaitForTransactionReceipt({
+    hash: allowanceTxHash,
   });
 
+  // حالت‌ها
   const [userData, setUserData] = useState<NeynarUser | null>(null);
   const [nftWallets, setNftWallets] = useState<string[]>([]);
   const [tipStats, setTipStats] = useState<TipStats>({
@@ -201,7 +206,6 @@ export default function Demo(
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
   const [lastProgress, setLastProgress] = useState(0);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [error, setError] = useState<string | null>(null);
   const [isWebnutsModalOpen, setIsWebnutsModalOpen] = useState(false);
   const [tippedTodayCasts, setTippedTodayCasts] = useState<CastWithAuthor[]>([]);
@@ -216,6 +220,7 @@ export default function Demo(
   const [targetFid, setTargetFid] = useState<string>("");
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isImageLoading, setIsImageLoading] = useState(true);
+  const isFetchingRef = useRef(false); // برای جلوگیری از اجرای همزمان fetchAllData
 
   // تابع برای به‌روزرسانی ایمن progress
   const updateProgress = useCallback((newProgress: number) => {
@@ -243,37 +248,34 @@ export default function Demo(
 
     if (context?.user?.fid && targetFid !== context.user.fid.toString()) {
       setTargetFid(context.user.fid.toString());
-      setError(null); // پاک کردن خطای قبلی
+      setError(null);
       setLoading(true);
       updateProgress(0);
       console.log("[Debug] targetFid updated to:", context.user.fid.toString());
-    } else if (!context?.user?.fid) {
-      console.log("[Debug] No FID available, setting error");
+    } else if (!context?.user?.fid && targetFid) {
+      console.log("[Debug] No FID available, resetting");
       setError("Please open the frame from Farcaster to view your data");
       setLoading(false);
-      setTargetFid(""); // ریست targetFid
+      setTargetFid("");
     }
   }, [isSDKLoaded, context, status, session, targetFid, updateProgress]);
 
   // بارگذاری داده‌ها
   useEffect(() => {
     console.log("[Debug] fetchAllData useEffect triggered with targetFid:", targetFid);
-    if (!targetFid) {
-      console.log("[Debug] No targetFid, skipping fetchAllData");
+    if (!targetFid || isFetchingRef.current) {
+      console.log("[Debug] No targetFid or already fetching, skipping fetchAllData");
       setLoading(false);
       return;
     }
 
-    const computedSize = calculateImageSize(targetFid);
-    console.log("[Debug] Computed image size:", computedSize);
-
     const fetchAllData = async () => {
+      isFetchingRef.current = true;
       try {
         setLoading(true);
         updateProgress(10);
         console.log("[Debug] Starting fetchAllData for targetFid:", targetFid);
 
-        // تخصیص وزن به هر تابع
         const totalSteps = 5;
         const stepWeight = 80 / totalSteps;
 
@@ -308,13 +310,14 @@ export default function Demo(
           memberType: nftData.memberType || "Not Active",
         }));
         setLeaderboardData(leaderboard);
-        updateProgress(90);
         updateProgress(100);
-        setLoading(false); // اضافه کردن این خط برای پایان حالت بارگذاری
+        setLoading(false);
       } catch (err) {
         setError("Failed to fetch data: " + (err as Error).message);
         console.error("[Error] fetchAllData:", err);
         setLoading(false);
+      } finally {
+        isFetchingRef.current = false;
       }
     };
 
@@ -378,48 +381,26 @@ export default function Demo(
             },
           });
           if (!searchRes.ok) {
-            throw new Error(
-              `HTTP error fetching casts for tippedToday! status: ${searchRes.status}`
-            );
+            throw new Error(`HTTP error fetching casts for tippedToday! status: ${searchRes.status}`);
           }
           const searchJson: SearchCastsResponse = await searchRes.json();
-          console.log(
-            "[Debug] Received casts for tippedToday:",
-            searchJson.result.casts.length
-          );
-          allCastsForTipped = allCastsForTipped.concat(
-            searchJson.result.casts || []
-          );
+          console.log("[Debug] Received casts for tippedToday:", searchJson.result.casts.length);
+          allCastsForTipped = allCastsForTipped.concat(searchJson.result.casts || []);
           cursorForTipped = searchJson.result.next?.cursor || null;
           tippedPages++;
           updateProgress(lastProgress + pageWeight * tippedPages);
-        } while (cursorForTipped && tippedPages < maxTippedPages);
+          // شرط اضافی برای توقف حلقه اگر کست‌ها کافی باشند
+          if (allCastsForTipped.length >= 500 || !cursorForTipped) break;
+        } while (tippedPages < maxTippedPages);
 
-        console.log(
-          "[Debug] Total casts for tippedToday:",
-          allCastsForTipped.length
-        );
+        console.log("[Debug] Total casts for tippedToday:", allCastsForTipped.length);
 
         const now = new Date();
         const startOfDayUTC = new Date(
-          Date.UTC(
-            now.getUTCFullYear(),
-            now.getUTCMonth(),
-            now.getUTCDate(),
-            0,
-            0,
-            0
-          )
+          Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0)
         );
         const endOfDayUTC = new Date(
-          Date.UTC(
-            now.getUTCFullYear(),
-            now.getUTCMonth(),
-            now.getUTCDate(),
-            23,
-            59,
-            59
-          )
+          Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59)
         );
 
         const relevantCastsForTipped = allCastsForTipped.filter((cast) => {
@@ -432,10 +413,7 @@ export default function Demo(
           );
         });
 
-        console.log(
-          "[Debug] Relevant casts for tippedToday:",
-          relevantCastsForTipped.length
-        );
+        console.log("[Debug] Relevant casts for tippedToday:", relevantCastsForTipped.length);
 
         const recipientFidsForTipped = [
           ...new Set(
@@ -469,12 +447,7 @@ export default function Demo(
             peanutCount = (text.match(/🥜/g) || []).length;
           }
           tippedToday += peanutCount;
-          console.log(
-            "[Debug] Cast text for tippedToday:",
-            text,
-            "Peanuts counted:",
-            peanutCount
-          );
+          console.log("[Debug] Cast text for tippedToday:", text, "Peanuts counted:", peanutCount);
         });
 
         setTipStats((prev) => ({ ...prev, tippedToday }));
@@ -489,10 +462,7 @@ export default function Demo(
         console.log("[Debug] Starting to fetch casts for todayEarning");
         do {
           const earningUrl: string = `https://api.neynar.com/v2/farcaster/cast/search?q=%F0%9F%A5%9C%20after:2025-04-04&limit=100${cursorForEarning ? `&cursor=${cursorForEarning}` : ""}`;
-          console.log(
-            "[Debug] Fetching casts for todayEarning from URL:",
-            earningUrl
-          );
+          console.log("[Debug] Fetching casts for todayEarning from URL:", earningUrl);
           const earningRes: Response = await fetch(earningUrl, {
             method: "GET",
             headers: {
@@ -501,53 +471,33 @@ export default function Demo(
             },
           });
           if (!earningRes.ok) {
-            throw new Error(
-              `HTTP error fetching casts for todayEarning! status: ${earningRes.status}`
-            );
+            throw new Error(`HTTP error fetching casts for todayEarning! status: ${earningRes.status}`);
           }
           const earningJson: SearchCastsResponse = await earningRes.json();
-          console.log(
-            "[Debug] Received casts for todayEarning:",
-            earningJson.result.casts.length
-          );
-          allCastsForEarning = allCastsForEarning.concat(
-            earningJson.result.casts || []
-          );
+          console.log("[Debug] Received casts for todayEarning:", earningJson.result.casts.length);
+          allCastsForEarning = allCastsForEarning.concat(earningJson.result.casts || []);
           cursorForEarning = earningJson.result.next?.cursor || null;
           earningPages++;
           updateProgress(lastProgress + earningPageWeight * earningPages);
-        } while (cursorForEarning && earningPages < maxEarningPages);
+          // شرط اضافی برای توقف حلقه
+          if (allCastsForEarning.length >= 500 || !cursorForEarning) break;
+        } while (earningPages < maxEarningPages);
 
-        console.log(
-          "[Debug] Total casts for todayEarning:",
-          allCastsForEarning.length
-        );
+        console.log("[Debug] Total casts for todayEarning:", allCastsForEarning.length);
 
         const replyCastsForEarning = allCastsForEarning.filter(
-          (cast) =>
-            cast.parent_author && cast.parent_author.fid === Number(targetFid)
+          (cast) => cast.parent_author && cast.parent_author.fid === Number(targetFid)
         );
 
-        console.log(
-          "[Debug] Filtered reply casts for todayEarning:",
-          replyCastsForEarning.length
-        );
+        console.log("[Debug] Filtered reply casts for todayEarning:", replyCastsForEarning.length);
 
         const relevantCastsForEarning = replyCastsForEarning.filter((cast) => {
           const castTimestamp = new Date(cast.timestamp);
-          console.log(
-            "[Debug] Checking cast timestamp for todayEarning:",
-            castTimestamp
-          );
-          return (
-            castTimestamp >= startOfDayUTC && castTimestamp <= endOfDayUTC
-          );
+          console.log("[Debug] Checking cast timestamp for todayEarning:", castTimestamp);
+          return castTimestamp >= startOfDayUTC && castTimestamp <= endOfDayUTC;
         });
 
-        console.log(
-          "[Debug] Relevant casts for todayEarning:",
-          relevantCastsForEarning.length
-        );
+        console.log("[Debug] Relevant casts for todayEarning:", relevantCastsForEarning.length);
 
         const authorFidsForEarning = [
           ...new Set(relevantCastsForEarning.map((cast) => cast.author.fid)),
@@ -577,12 +527,7 @@ export default function Demo(
             peanutCount = (text.match(/🥜/g) || []).length;
           }
           todayEarning += peanutCount;
-          console.log(
-            "[Debug] Cast text for todayEarning:",
-            text,
-            "Peanuts counted:",
-            peanutCount
-          );
+          console.log("[Debug] Cast text for todayEarning:", text, "Peanuts counted:", peanutCount);
         });
 
         setTipStats((prev) => ({ ...prev, todayEarning }));
@@ -599,13 +544,7 @@ export default function Demo(
 
     const fetchDuneStats = async (weight: number): Promise<{ allTimeEarning: number; rank: number }> => {
       try {
-        console.log(
-          "[SQLite] Fetching data from SQLite Cloud for targetFid:",
-          targetFid,
-          " (type:",
-          typeof targetFid,
-          ")"
-        );
+        console.log("[SQLite] Fetching data from SQLite Cloud for targetFid:", targetFid);
         updateProgress(lastProgress + weight * 0.5);
         const db = new Database(
           "sqlitecloud://cntihai1nk.g4.sqlite.cloud:8860/dune_data.db?apikey=GEKHc2AnfNuuZQvBjekbuOP7QHlFWPHSHPChPKswA4c"
@@ -616,24 +555,15 @@ export default function Demo(
           throw new Error("No data returned from SQLite Cloud");
         }
 
-        console.log(
-          "[SQLite] Available parent_fids and fids:",
-          rows.map((row: DuneRow) => ({ parent_fid: row.parent_fid, fid: row.fid }))
-        );
+        console.log("[SQLite] Available parent_fids and fids:", rows.map((row: DuneRow) => ({ parent_fid: row.parent_fid, fid: row.fid })));
         const userData = rows.find(
-          (row: DuneRow) =>
-            String(row.parent_fid) === String(targetFid) ||
-            String(row.fid) === String(targetFid)
+          (row: DuneRow) => String(row.parent_fid) === String(targetFid) || String(row.fid) === String(targetFid)
         );
 
         if (!userData) {
           console.error("[SQLite Error] No data found for FID:", targetFid);
           setError(`No SQLite data found for FID: ${targetFid}`);
-          setTipStats((prev) => ({
-            ...prev,
-            allTimeEarning: 0,
-            rank: 0,
-          }));
+          setTipStats((prev) => ({ ...prev, allTimeEarning: 0, rank: 0 }));
           return { allTimeEarning: 0, rank: 0 };
         }
 
@@ -648,11 +578,7 @@ export default function Demo(
       } catch (err) {
         console.error("[SQLite Error] Failed to fetch data:", err);
         setError("Failed to fetch SQLite data: " + (err as Error).message);
-        setTipStats((prev) => ({
-          ...prev,
-          allTimeEarning: 0,
-          rank: 0,
-        }));
+        setTipStats((prev) => ({ ...prev, allTimeEarning: 0, rank: 0 }));
         return { allTimeEarning: 0, rank: 0 };
       }
     };
@@ -752,7 +678,7 @@ export default function Demo(
 
     fetchAllData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetFid, updateProgress, lastProgress]);
+  }, [targetFid, updateProgress]);
 
   const sendNotification = useCallback(async () => {
     setSendNotificationResult("");
@@ -791,7 +717,6 @@ export default function Demo(
 
   console.log("[Debug] Rendering with tipStats:", tipStats);
 
-  // شرط رندر اصلاح‌شده
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#2b1409] via-[#4a2512] to-[#6b3a1e] p-4">
@@ -925,7 +850,7 @@ export default function Demo(
     );
   }
 
-  // اگر بارگذاری تمام شده، صفحه اصلی نمایش داده می‌شود
+  // رندر صفحه اصلی
   console.log("[Debug] Rendering with tipStats:", tipStats);
   console.log("[Debug] Rendering with userData:", userData);
 
