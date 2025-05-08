@@ -5,12 +5,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Metadata } from "next";
 import Image from "next/image";
-import { signIn, signOut, getCsrfToken } from "next-auth/react";
-import sdk, { SignIn as SignInCore } from "@farcaster/frame-sdk";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi"; // import { useAccount, useConnect, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { signIn, signOut } from "next-auth/react";
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { useSession } from "next-auth/react";
 import { useFrame } from "~/components/providers/FrameProvider";
-import { Button } from "~/components/ui/Button";
 import { Database } from "@sqlitecloud/drivers";
 import { size, toHex } from "viem";
 
@@ -125,6 +123,7 @@ const fetchUsernames = async (fids: number[]): Promise<Record<number, string>> =
     },
   };
   try {
+    console.log("[Debug] Fetching usernames for fids:", fids);
     const res = await fetch(url, options);
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     const json = await res.json();
@@ -132,9 +131,10 @@ const fetchUsernames = async (fids: number[]): Promise<Record<number, string>> =
     json.users.forEach((user: NeynarUser) => {
       usernameMap[user.fid] = user.username;
     });
+    console.log("[Debug] Username map:", usernameMap);
     return usernameMap;
   } catch (err) {
-    console.error("Failed to fetch usernames:", err);
+    console.error("[Error] Failed to fetch usernames:", err);
     return {};
   }
 };
@@ -159,9 +159,8 @@ export default function Demo(
   { title }: { title?: string } = { title: "Farcaster Tips Stats Demo" }
 ) {
   const { isSDKLoaded, context, notificationDetails } = useFrame();
-  const { isConnected } = useAccount(); //const { address, isConnected } = useAccount();
-  // const { connect, connectors, error: connectError } = useConnect(); // اضافه کردن useConnect
-  const { status } = useSession();
+  const { isConnected } = useAccount();
+  const { status, data: session } = useSession();
 
   // Hooks for OG NFT contract interaction
   const {
@@ -211,19 +210,36 @@ export default function Demo(
     { fid: number; username: string; rank: number; allTimePeanutCount: number }[]
   >([]);
   const [sendNotificationResult, setSendNotificationResult] = useState("");
-  const [targetFid, setTargetFid] = useState<string>("395478"); // مقدار پیش‌فرض FID
+  const [targetFid, setTargetFid] = useState<string>("");
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isImageLoading, setIsImageLoading] = useState(true);
 
-  // بعد از ساین‌این، FID کاربر جایگزین می‌شه
+  // تنظیم targetFid بر اساس FID کاربر در زمان باز شدن فریم
   useEffect(() => {
-    if (status === "authenticated" && context?.user?.fid) {
+    console.log("[Debug] isSDKLoaded:", isSDKLoaded);
+    console.log("[Debug] Context user FID:", context?.user?.fid);
+    console.log("[Debug] Current targetFid:", targetFid);
+    console.log("[Debug] Session status:", status);
+    console.log("[Debug] Session data:", session);
+    if (isSDKLoaded && context?.user?.fid) {
       setTargetFid(context.user.fid.toString());
+      console.log("[Debug] targetFid updated to:", context.user.fid.toString());
+    } else {
+      console.log("[Debug] No FID available, keeping targetFid empty");
+      setError("Please open the frame from Farcaster to view your data");
+      setLoading(false);
     }
-  }, [status, context]);
+  }, [isSDKLoaded, context, status, session, targetFid]);
 
-  
+  // بارگذاری داده‌ها بر اساس targetFid
   useEffect(() => {
+    console.log("[Debug] fetchAllData useEffect triggered with targetFid:", targetFid);
+    if (!targetFid) {
+      console.log("[Debug] No targetFid, skipping fetchAllData");
+      setLoading(false);
+      return;
+    }
+
     const computedSize = calculateImageSize(targetFid);
     console.log("[Debug] Computed image size:", computedSize);
 
@@ -231,6 +247,7 @@ export default function Demo(
       try {
         setLoading(true);
         setProgress(10);
+        console.log("[Debug] Starting fetchAllData for targetFid:", targetFid);
         const [userData, tipStats, duneStats, nftData, leaderboard] = await Promise.all([
           fetchUserData(),
           fetchTipStats(),
@@ -238,6 +255,11 @@ export default function Demo(
           fetchNFTData(),
           fetchLeaderboard(),
         ]);
+        console.log("[Debug] Fetched userData:", userData);
+        console.log("[Debug] Fetched tipStats:", tipStats);
+        console.log("[Debug] Fetched duneStats:", duneStats);
+        console.log("[Debug] Fetched nftData:", nftData);
+        console.log("[Debug] Fetched leaderboard:", leaderboard);
         setUserData(userData || null);
         setTipStats((prev) => ({
           ...prev,
@@ -252,7 +274,7 @@ export default function Demo(
         setProgress(100);
       } catch (err) {
         setError("Failed to fetch data: " + (err as Error).message);
-        console.error(err);
+        console.error("[Error] fetchAllData:", err);
       } finally {
         setLoading(false);
       }
@@ -271,6 +293,7 @@ export default function Demo(
 
       try {
         setProgress(20);
+        console.log("[Debug] Fetching user data from URL:", url);
         const res = await fetch(url, options);
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
@@ -278,20 +301,22 @@ export default function Demo(
         const json = await res.json();
         if (json.users && json.users.length > 0) {
           setUserData(json.users[0]);
+          console.log("[Debug] User data fetched:", json.users[0]);
           return json.users[0];
         } else {
           setError("User not found");
+          console.error("[Error] User not found for FID:", targetFid);
           return undefined;
         }
       } catch (err) {
         setError("Failed to fetch user data: " + (err as Error).message);
-        console.error(err);
+        console.error("[Error] fetchUserData:", err);
         return undefined;
       }
     };
 
     const fetchTipStats = async (): Promise<{ todayEarning: number; tippedToday: number }> => {
-      console.log("[Debug] targetFid:", targetFid);
+      console.log("[Debug] Fetching tip stats for targetFid:", targetFid);
       let tippedToday = 0;
       let todayEarning = 0;
 
@@ -521,9 +546,10 @@ export default function Demo(
         });
 
         setTipStats((prev) => ({ ...prev, todayEarning }));
+        console.log("[Debug] Tip stats updated:", { todayEarning, tippedToday });
         return { todayEarning, tippedToday };
       } catch (err) {
-        console.error("Failed to fetch tip stats:", err);
+        console.error("[Error] Failed to fetch tip stats:", err);
         setError("Failed to fetch tip stats: " + (err as Error).message);
         setTipStats((prev) => ({ ...prev, todayEarning: 0, tippedToday: 0 }));
         return { todayEarning: 0, tippedToday: 0 };
@@ -684,14 +710,14 @@ export default function Demo(
     };
 
     fetchAllData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetFid]); // هر وقت targetFid تغییر کنه، داده‌ها دوباره fetch می‌شن
+  }, [targetFid, userData?.verifications, userData?.custody_address]);
 
   const sendNotification = useCallback(async () => {
     setSendNotificationResult("");
     if (!notificationDetails || !context || !tipStats) return;
 
     try {
+      console.log("[Debug] Sending notification for FID:", context?.user?.fid);
       const response = await fetch("/api/send-notification", {
         method: "POST",
         mode: "same-origin",
@@ -706,20 +732,24 @@ export default function Demo(
 
       if (response.status === 200) {
         setSendNotificationResult("Notification sent!");
+        console.log("[Debug] Notification sent successfully");
       } else if (response.status === 429) {
         setSendNotificationResult("Rate limited");
+        console.warn("[Debug] Notification rate limited");
       } else {
         const data = await response.text();
         setSendNotificationResult(`Error: ${data}`);
+        console.error("[Error] Notification failed:", data);
       }
     } catch (error) {
       setSendNotificationResult(`Error: ${error}`);
+      console.error("[Error] Notification error:", error);
     }
   }, [context, notificationDetails, tipStats]);
 
-  console.log("Rendering with tipStats:", tipStats);
+  console.log("[Debug] Rendering with tipStats:", tipStats);
 
-  if (!isSDKLoaded || loading) {
+  if (!isSDKLoaded || (loading && targetFid)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#2b1409] via-[#4a2512] to-[#6b3a1e] p-4">
         <div className="loader-container">
@@ -854,7 +884,8 @@ export default function Demo(
 
   if (error) return <div className="text-red-500 text-center">{error}</div>;
 
-  console.log("Rendering with tipStats:", tipStats);
+  console.log("[Debug] Rendering with tipStats:", tipStats);
+  console.log("[Debug] Rendering with userData:", userData);
 
   const buttons: ButtonItem[] = [
     {
@@ -941,31 +972,10 @@ export default function Demo(
 
         {!isConnected ? (
           <>
-            {/* <div className="text-center mb-4">
-              <Button
-                onClick={() => {
-                  const injectedConnector = connectors.find(c => c.id === "injected");
-                  if (injectedConnector) {
-                    connect({ connector: injectedConnector });
-                  } else {
-                    alert("Wallet connector not found. Please ensure Wallet is installed.");
-                  }
-                }}
-                className="py-2 px-4 bg-[#f5c542] text-[#1a0e06] rounded-lg font-semibold hover:bg-[#ff6f61] transition-colors duration-200"
-              >
-                Connect Wallet
-              </Button>
-              {connectError && (
-                <p className="text-red-500 text-sm mt-2">{connectError.message}</p>
-              )}
-            </div>*/}
-            </>
-          ) : (
-            // <p className="text-center text-[#f5c542] mb-4">
-              //  Connected: {truncateAddressShort(address || "")}
-            // </p> 
-            <>
-            </>
+          </>
+        ) : (
+          <>
+          </>
         )}
 
         <div className="relative w-full h-[150px] mb-10">
@@ -1167,7 +1177,7 @@ export default function Demo(
             className={`w-[140px] cursor-pointer transition-transform duration-200 hover:scale-105 ${
               !notificationDetails || !isConnected
                 ? "opacity-50 pointer-events-none"
-: ""
+                : ""
             }`}
           />
         </div>
@@ -1335,16 +1345,17 @@ export default function Demo(
                   ✕
                 </button>
               </div>
-              <div className="space-y-4">
+              <div className="space-y-2">
                 {leaderboardData.length > 0 ? (
                   leaderboardData.map((entry) => (
                     <div
                       key={entry.fid}
-                      className="p-4 bg-[#3a2a1a] rounded-lg"
+                      className="p-2 bg-[#3a2a1a]/60 rounded-lg flex justify-between items-center"
                     >
-                      <div className="text-[#f5c542] font-bold">Rank {entry.rank}</div>
-                      <div className="text-white">@{entry.username} (FID: {entry.fid})</div>
-                      <div className="text-gray-300">Total Peanuts: {entry.allTimePeanutCount}</div>
+                      <span className="text-[#f5c542]">
+                        #{entry.rank} @{entry.username} (FID: {entry.fid})
+                      </span>
+                      <span className="text-white">{entry.allTimePeanutCount} 🥜</span>
                     </div>
                   ))
                 ) : (
@@ -1354,170 +1365,57 @@ export default function Demo(
             </div>
           </div>
         )}
-
-        <div className="frame-by">
-          Frame by: <span className="text-[#f5c542]">@arsalang.eth</span> &{" "}
-          <span className="text-[#f5c542]">@jeyloo.eth</span>
-        </div>
       </div>
-
-      <style jsx>{`
-        .frame-by {
-          font-size: 0.65rem;
-          text-align: center;
-          color: #432818;
-          margin-bottom: 1rem;
-          font-family: "Poetsen One";
-        }
-        .frame-by span {
-          color: rgb(196, 138, 51);
-        }
-
-        .animate-pulse-slow {
-          animation: pulse 3s ease-in-out infinite;
-        }
-        @keyframes pulse {
-          0%,
-          100% {
-            opacity: 1;
-            transform: scale(1);
-          }
-          50% {
-            opacity: 0.8;
-            transform: scale(1.02);
-          }
-        }
-
-        .loading-spinner-container {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          height: 100px;
-        }
-
-        .loading-spinner {
-          width: 40px;
-          height: 40px;
-          border: 4px solid rgba(245, 197, 66, 0.3);
-          border-top-color: #f5c542;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-          0% {
-            transform: rotate(0deg);
-          }
-          100% {
-            transform: rotate(360deg);
-          }
-        }
-
-        .share-modal-container {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          min-height: 100vh;
-          padding: 0;
-          margin: 0;
-          width: 100vw;
-          left: 0;
-          top: 0;
-        }
-
-        .share-modal {
-          transform: translate(0, 0);
-          margin: 0 auto;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-        }
-
-        @media (max-width: 640px) {
-          .share-modal {
-            width: 90vw;
-            max-width: 365px;
-            margin: 0 auto;
-          }
-        }
-      `}</style>
     </div>
   );
 }
 
+// کامپوننت SignIn
 function SignIn() {
-  const [signingIn, setSigningIn] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
-  const [signInResult, setSignInResult] = useState<SignInCore.SignInResult>();
-  const [signInFailure, setSignInFailure] = useState<string>();
   const { status } = useSession();
+  const { isSDKLoaded } = useFrame();
 
-  const getNonce = useCallback(async () => {
-    const nonce = await getCsrfToken();
-    if (!nonce) throw new Error("Unable to generate nonce");
-    return nonce;
-  }, []);
-
-  const handleSignIn = useCallback(async () => {
+  const handleSignIn = async () => {
     try {
-      setSigningIn(true);
-      setSignInFailure(undefined);
-      const nonce = await getNonce();
-      const result = await sdk.actions.signIn({ nonce });
-      setSignInResult(result);
-      await signIn("credentials", {
-        message: result.message,
-        signature: result.signature,
-        redirect: false,
-      });
-    } catch (e) {
-      if (e instanceof SignInCore.RejectedByUser) {
-        setSignInFailure("Rejected by user");
-      } else {
-        setSignInFailure("Unknown error");
-      }
-    } finally {
-      setSigningIn(false);
+      console.log("[Debug] Initiating sign-in process");
+      await signIn("farcaster", { redirect: false });
+      console.log("[Debug] Signed in with Farcaster");
+    } catch (error) {
+      console.error("[Error] Sign-in failed:", error);
     }
-  }, [getNonce]);
+  };
 
-  const handleSignOut = useCallback(async () => {
+  const handleSignOut = async () => {
     try {
-      setSigningOut(true);
+      console.log("[Debug] Initiating sign-out process");
       await signOut({ redirect: false });
-      setSignInResult(undefined);
-    } finally {
-      setSigningOut(false);
+      console.log("[Debug] Signed out");
+    } catch (error) {
+      console.error("[Error] Sign-out failed:", error);
     }
-  }, []);
+  };
+
+  if (!isSDKLoaded) {
+    return <div>Loading...</div>;
+  }
 
   return (
-    <>
-      {status !== "authenticated" ? (
+    <div>
+      {status === "authenticated" ? (
         <img
-          src="https://img1.pixhost.to/images/5197/590510357_sign-in-btn.png"
-          alt="Sign In with Farcaster"
-          onClick={handleSignIn}
+          src="https://img1.pixhost.to/images/5197/590510977_signout-btn.png"
+          alt="Sign Out"
+          onClick={handleSignOut}
           className="w-[140px] cursor-pointer transition-transform duration-200 hover:scale-105"
         />
       ) : (
-        <Button
-          onClick={handleSignOut}
-          disabled={signingOut}
-          className="flex-1 py-2 bg-[#f5425d] text-white rounded-lg font-semibold hover:bg-[#ff627a] transition-colors duration-200"
-        >
-          Sign Out
-        </Button>
+        <img
+          src="https://img1.pixhost.to/images/5197/590510976_signin-btn.png"
+          alt="Sign In"
+          onClick={handleSignIn}
+          className="w-[140px] cursor-pointer transition-transform duration-200 hover:scale-105"
+        />
       )}
-      {signInFailure && !signingIn && (
-        <div className="text-sm text-red-400 mt-2 text-center">{signInFailure}</div>
-      )}
-      {signInResult && !signingIn && (
-        <div className="text-sm text-green-400 mt-2 text-center">
-          Signed in successfully!
-        </div>
-      )}
-    </>
+    </div>
   );
 }
