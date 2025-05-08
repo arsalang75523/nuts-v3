@@ -791,7 +791,7 @@ export default function Demo(
   console.log("[Debug] Rendering with tipStats:", tipStats);
 
   // شرط رندر اصلاح‌شده
-  if (loading && targetFid) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#2b1409] via-[#4a2512] to-[#6b3a1e] p-4">
         <div className="loader-container">
@@ -924,12 +924,7 @@ export default function Demo(
     );
   }
 
-  // شرط رندر اصلاح‌شده برای نمایش خطا یا صفحه اصلی
-  if (error && !targetFid) {
-    return <div className="text-red-500 text-center">{error}</div>;
-  }
-
-  // اگر بارگذاری تمام شده و خطایی وجود ندارد، صفحه اصلی نمایش داده می‌شود
+  // اگر بارگذاری تمام شده، صفحه اصلی نمایش داده می‌شود
   console.log("[Debug] Rendering with tipStats:", tipStats);
   console.log("[Debug] Rendering with userData:", userData);
 
